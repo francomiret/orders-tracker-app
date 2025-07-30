@@ -12,6 +12,8 @@ const errorHandler = require("./middleware/errorHandler");
 // Import routes
 const pingRoutes = require("./routes/ping");
 const healthRoutes = require("./routes/health");
+const ordersRoutes = require("./routes/orders");
+const alertsRoutes = require("./routes/alerts");
 
 // Initialize express app
 const app = express();
@@ -54,6 +56,8 @@ app.use(
 // Routes
 app.use("/api/ping", pingRoutes);
 app.use("/api/health", healthRoutes);
+app.use("/api/orders", ordersRoutes);
+app.use("/api/alerts", alertsRoutes);
 
 // Root route
 app.get("/", (req, res) => {
@@ -96,6 +100,8 @@ const server = app.listen(PORT, () => {
   console.log(
     `🏥 Health check available at http://localhost:${PORT}/api/health`
   );
+  console.log(`📦 Orders API available at http://localhost:${PORT}/api/orders`);
+  console.log(`🚨 Alerts API available at http://localhost:${PORT}/api/alerts`);
 });
 
 // Handle unhandled promise rejections
