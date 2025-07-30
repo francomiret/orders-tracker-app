@@ -11,6 +11,7 @@ const errorHandler = require("./middleware/errorHandler");
 
 // Import routes
 const pingRoutes = require("./routes/ping");
+const healthRoutes = require("./routes/health");
 
 // Initialize express app
 const app = express();
@@ -50,8 +51,9 @@ app.use(
   })
 );
 
-// Ping route
+// Routes
 app.use("/api/ping", pingRoutes);
+app.use("/api/health", healthRoutes);
 
 // Root route
 app.get("/", (req, res) => {
@@ -61,6 +63,7 @@ app.get("/", (req, res) => {
     version: "1.0.0",
     documentation: "/api-docs",
     ping: "/api/ping",
+    health: "/api/health",
   });
 });
 
@@ -80,7 +83,18 @@ const PORT = process.env.PORT || 3000;
 
 const server = app.listen(PORT, () => {
   console.log(
-    `API Documentation available at http://localhost:${PORT}/api-docs`
+    `🚀 Server running in ${
+      process.env.NODE_ENV || "development"
+    } mode on port ${PORT}`
+  );
+  console.log(
+    `📚 API Documentation available at http://localhost:${PORT}/api-docs`
+  );
+  console.log(
+    `🏓 Ping endpoint available at http://localhost:${PORT}/api/ping`
+  );
+  console.log(
+    `🏥 Health check available at http://localhost:${PORT}/api/health`
   );
 });
 
