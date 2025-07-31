@@ -15,6 +15,8 @@ const healthRoutes = require("./routes/health");
 const ordersRoutes = require("./routes/orders");
 const alertsRoutes = require("./routes/alerts");
 const alertRulesRoutes = require("./routes/alertRules");
+const notificationsRoutes = require("./routes/notifications");
+const { initializeWebSocket } = require("./websocket");
 
 // Initialize express app
 const app = express();
@@ -60,6 +62,7 @@ app.use("/api/health", healthRoutes);
 app.use("/api/orders", ordersRoutes);
 app.use("/api/alerts", alertsRoutes);
 app.use("/api/alert-rules", alertRulesRoutes);
+app.use("/api/notifications", notificationsRoutes); // Nueva ruta
 
 // Root route
 app.get("/", (req, res) => {
@@ -107,7 +110,13 @@ const server = app.listen(PORT, () => {
   console.log(
     `⚙️ Alert Rules API available at http://localhost:${PORT}/api/alert-rules`
   );
+  console.log(
+    `📬 Notifications API available at http://localhost:${PORT}/api/notifications`
+  );
 });
+
+// Inicializar WebSocket
+initializeWebSocket(server);
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (err, promise) => {

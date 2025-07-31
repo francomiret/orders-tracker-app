@@ -1,6 +1,7 @@
 const alertsRepository = require("../repository/alerts.repository");
 const ordersRepository = require("../repository/orders.repository");
 const { parsePagination } = require("../utils/pagination");
+const notificationsService = require("./notifications.service");
 
 // Get all alert rules with pagination
 const getAllAlertRules = async (query) => {
@@ -192,7 +193,7 @@ const executeAlertRules = async () => {
             );
             if (daysSinceCreation >= rule.threshold) {
               shouldCreateAlert = true;
-              alertMessage = `Order has been in ${order.status} status for ${daysSinceCreation} days (threshold: ${rule.threshold} days)`;
+              alertMessage = `Pedido ${order.id} ha estado en estado ${order.status} por ${daysSinceCreation} días (umbral: ${rule.threshold} días)`;
             }
           }
           break;
@@ -204,9 +205,8 @@ const executeAlertRules = async () => {
             const isSameDay = orderDate.toDateString() === today.toDateString();
 
             if (isSameDay && today.getHours() >= 18) {
-              // After 6 PM
               shouldCreateAlert = true;
-              alertMessage = `Order created today has not been delivered yet (current status: ${order.status})`;
+              alertMessage = `Pedido ${order.id} creado hoy no ha sido entregado (estado actual: ${order.status})`;
             }
           }
           break;
@@ -227,7 +227,25 @@ const executeAlertRules = async () => {
             alert_type: rule.rule_type,
             message: alertMessage,
           });
+
           createdAlerts.push(newAlert);
+
+          // Crear notificación automáticamente
+          await notificationsService.createAlertNotification(
+            newAlert,
+            order.user_id
+          );
+
+          // Enviar notificación administrativa
+          await notificationsService.createAdminNotification(
+            `Alerta Automática: ${rule.rule_type}`,
+            alertMessage,
+            {
+              order_id: order.id,
+              rule_type: rule.rule_type,
+              threshold: rule.threshold,
+            }
+          );
         }
       }
     }
