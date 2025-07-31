@@ -148,10 +148,16 @@ const updateAlertRuleThreshold = async (req, res) => {
   try {
     const { id } = req.params;
     const { threshold } = req.body;
-    const rule = await alertRulesService.updateAlertRuleThreshold(
-      id,
-      threshold
-    );
+
+    // Validar threshold
+    if (!threshold || threshold <= 0) {
+      return res.status(400).json({
+        success: false,
+        error: "Threshold must be greater than 0",
+      });
+    }
+
+    const rule = await alertRulesService.updateAlertRule(id, { threshold });
 
     res.json({
       message: "Alert rule threshold updated successfully",
@@ -160,6 +166,21 @@ const updateAlertRuleThreshold = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating alert rule threshold:", error);
+
+    if (error.message === "Alert rule not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Alert rule not found",
+      });
+    }
+
+    if (error.message.includes("already exists")) {
+      return res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+
     res.status(500).json({
       success: false,
       error: "Failed to update alert rule threshold",
