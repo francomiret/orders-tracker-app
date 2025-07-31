@@ -13,7 +13,6 @@ const errorHandler = require("./middleware/errorHandler");
 const pingRoutes = require("./routes/ping");
 const healthRoutes = require("./routes/health");
 const ordersRoutes = require("./routes/orders");
-const alertsRoutes = require("./routes/alerts");
 const alertRulesRoutes = require("./routes/alertRules");
 const notificationsRoutes = require("./routes/notifications");
 const { initializeWebSocket } = require("./websocket");
@@ -60,9 +59,8 @@ app.use(
 app.use("/api/ping", pingRoutes);
 app.use("/api/health", healthRoutes);
 app.use("/api/orders", ordersRoutes);
-app.use("/api/alerts", alertsRoutes);
 app.use("/api/alert-rules", alertRulesRoutes);
-app.use("/api/notifications", notificationsRoutes); // Nueva ruta
+app.use("/api/notifications", notificationsRoutes);
 
 // Root route
 app.get("/", (req, res) => {

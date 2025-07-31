@@ -36,54 +36,88 @@ const createNotification = async (notificationData) => {
   }
 };
 
-// Crear notificación de alerta
+// Función mejorada para crear notificaciones de alerta
 const createAlertNotification = async (alert, userId = null) => {
+  // Determinar el título y mensaje basado en el tipo de alerta
+  let title, message, priority;
+
+  switch (alert.alert_type) {
+    case "NOT_DISPATCHED_IN_X_DAYS":
+      title = "🚨 Pedido Retrasado";
+      message = `El pedido ${alert.order_id} lleva demasiado tiempo sin ser despachado`;
+      priority = "high";
+      break;
+    case "NOT_DELIVERED_SAME_DAY":
+      title = "⚠️ Pedido No Entregado";
+      message = `El pedido ${alert.order_id} creado hoy no ha sido entregado`;
+      priority = "critical";
+      break;
+    default:
+      title = `Alerta: ${alert.alert_type}`;
+      message = alert.message;
+      priority = "medium";
+  }
+
   const notificationData = {
     user_id: userId,
     type: "ALERT_GENERATED",
-    title: `Alerta: ${alert.alert_type}`,
-    message: alert.message,
+    title,
+    message,
     data: {
       alert_id: alert.id,
       order_id: alert.order_id,
       alert_type: alert.alert_type,
+      priority,
+      original_message: alert.message,
     },
   };
 
   return await createNotification(notificationData);
 };
 
-// Crear notificación de cambio de estado
+// Función para crear notificaciones de cambio de estado
 const createStatusChangeNotification = async (
   order,
   oldStatus,
   newStatus,
   userId = null
 ) => {
+  const statusEmojis = {
+    CREATED: "🚚",
+    PREPARING: "⚙️",
+    DISPATCHED: "🚚",
+    DELIVERED: "✅",
+  };
+
   const notificationData = {
     user_id: userId,
     type: "ORDER_STATUS_CHANGED",
-    title: `Estado de Pedido Actualizado`,
+    title: `${statusEmojis[newStatus]} Estado Actualizado`,
     message: `El pedido ${order.id} cambió de ${oldStatus} a ${newStatus}`,
     data: {
       order_id: order.id,
       old_status: oldStatus,
       new_status: newStatus,
       customer_name: order.customer_name,
+      status_emoji: statusEmojis[newStatus],
     },
   };
 
   return await createNotification(notificationData);
 };
 
-// Crear notificación administrativa
+// Función para crear notificaciones administrativas mejoradas
 const createAdminNotification = async (title, message, data = {}) => {
   const notificationData = {
     user_id: null, // null para notificaciones administrativas
     type: "ADMIN_ALERT",
-    title,
+    title: `👨‍💼 ${title}`,
     message,
-    data,
+    data: {
+      ...data,
+      admin_notification: true,
+      timestamp: new Date().toISOString(),
+    },
   };
 
   return await createNotification(notificationData);
@@ -91,10 +125,29 @@ const createAdminNotification = async (title, message, data = {}) => {
 
 // Obtener notificaciones de un usuario
 const getUserNotifications = async (userId, options = {}) => {
+  const {
+    skip = 0,
+    take = 50,
+    unreadOnly = false,
+    type = null,
+    priority = null,
+  } = options;
+
   const notifications = await notificationsRepository.findNotificationsByUserId(
     userId,
-    options
+    { skip, take, unreadOnly }
   );
+
+  // Filtrar por tipo si se especifica
+  if (type) {
+    notifications = notifications.filter((n) => n.type === type);
+  }
+
+  // Filtrar por prioridad si se especifica
+  if (priority) {
+    notifications = notifications.filter((n) => n.data?.priority === priority);
+  }
+
   return notifications;
 };
 
@@ -113,6 +166,43 @@ const getNotificationStats = async (userId) => {
   return await notificationsRepository.getNotificationStats(userId);
 };
 
+// Función para obtener estadísticas detalladas
+const getDetailedNotificationStats = async (userId) => {
+  const notifications = await notificationsRepository.findNotificationsByUserId(
+    userId,
+    { skip: 0, take: 1000 }
+  );
+
+  const stats = {
+    total: notifications.length,
+    unread: notifications.filter((n) => !n.read).length,
+    read: notifications.filter((n) => n.read).length,
+    byType: {
+      ALERT_GENERATED: notifications.filter((n) => n.type === "ALERT_GENERATED")
+        .length,
+      ORDER_STATUS_CHANGED: notifications.filter(
+        (n) => n.type === "ORDER_STATUS_CHANGED"
+      ).length,
+      ADMIN_ALERT: notifications.filter((n) => n.type === "ADMIN_ALERT").length,
+      SYSTEM_NOTIFICATION: notifications.filter(
+        (n) => n.type === "SYSTEM_NOTIFICATION"
+      ).length,
+    },
+    byPriority: {
+      critical: notifications.filter((n) => n.data?.priority === "critical")
+        .length,
+      high: notifications.filter((n) => n.data?.priority === "high").length,
+      medium: notifications.filter((n) => n.data?.priority === "medium").length,
+      low: notifications.filter((n) => n.data?.priority === "low").length,
+    },
+    recent: notifications.filter(
+      (n) => new Date(n.created_at) > new Date(Date.now() - 24 * 60 * 60 * 1000)
+    ).length,
+  };
+
+  return stats;
+};
+
 // Eliminar notificación
 const deleteNotification = async (notificationId) => {
   return await notificationsRepository.deleteNotification(notificationId);
@@ -127,5 +217,6 @@ module.exports = {
   markAsRead,
   markAllAsRead,
   getNotificationStats,
+  getDetailedNotificationStats,
   deleteNotification,
 };

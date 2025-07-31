@@ -10,6 +10,7 @@ const {
   getActiveAlertRules,
   executeAlertRules,
   getAlertRuleStats,
+  updateAlertRuleThreshold,
 } = require("../controllers/alertRules.controller");
 
 /**
@@ -275,6 +276,57 @@ router.post("/execute", executeAlertRules);
 
 /**
  * @swagger
+ * /alert-rules/execute-with-notifications:
+ *   post:
+ *     summary: Execute alert rules and create notifications
+ *     description: Execute all active alert rules and create notifications for affected users
+ *     tags: [Alert Rules]
+ *     responses:
+ *       200:
+ *         description: Alert rules executed successfully with notifications
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Executed 2 active rules against 15 orders"
+ *                     createdAlerts:
+ *                       type: integer
+ *                       example: 3
+ *                     createdNotifications:
+ *                       type: integer
+ *                       example: 5
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalOrders:
+ *                           type: integer
+ *                           example: 15
+ *                         activeRules:
+ *                           type: integer
+ *                           example: 2
+ *                         alertsCreated:
+ *                           type: integer
+ *                           example: 3
+ *                         notificationsSent:
+ *                           type: integer
+ *                           example: 5
+ *                         uniqueUsersNotified:
+ *                           type: integer
+ *                           example: 3
+ */
+router.post("/execute-with-notifications", executeAlertRules);
+
+/**
+ * @swagger
  * /alert-rules:
  *   post:
  *     summary: Create a new alert rule
@@ -516,5 +568,64 @@ router.patch("/:id/toggle", toggleAlertRuleStatus);
  *               $ref: '#/components/schemas/Error'
  */
 router.delete("/:id", deleteAlertRule);
+
+/**
+ * @swagger
+ * /alert-rules/{id}/threshold:
+ *   patch:
+ *     summary: Update alert rule threshold
+ *     description: Update the threshold value of an alert rule
+ *     tags: [Alert Rules]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Alert rule ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               threshold:
+ *                 type: integer
+ *                 description: New threshold value
+ *                 example: 5
+ *     responses:
+ *       200:
+ *         description: Alert rule threshold updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/AlertRule'
+ *       400:
+ *         description: Invalid request data or validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Alert rule not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.patch("/:id/threshold", updateAlertRuleThreshold);
 
 module.exports = router;

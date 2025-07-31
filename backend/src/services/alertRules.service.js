@@ -1,4 +1,4 @@
-const alertsRepository = require("../repository/alerts.repository");
+const alertRulesRepository = require("../repository/alertRules.repository");
 const ordersRepository = require("../repository/orders.repository");
 const { parsePagination } = require("../utils/pagination");
 const notificationsService = require("./notifications.service");
@@ -8,8 +8,8 @@ const getAllAlertRules = async (query) => {
   const { skip, take } = parsePagination(query);
 
   const [rules, totalCount] = await Promise.all([
-    alertsRepository.findAllAlertRules({ skip, take }),
-    alertsRepository.countAlertRules(),
+    alertRulesRepository.findAllAlertRules({ skip, take }),
+    alertRulesRepository.countAlertRules(),
   ]);
 
   return {
@@ -25,7 +25,7 @@ const getAllAlertRules = async (query) => {
 
 // Get alert rule by ID
 const getAlertRuleById = async (id) => {
-  const rule = await alertsRepository.findAlertRuleById(id);
+  const rule = await alertRulesRepository.findAlertRuleById(id);
   if (!rule) {
     throw new Error("Alert rule not found");
   }
@@ -54,26 +54,22 @@ const createAlertRule = async (ruleData) => {
   }
 
   // Check if rule already exists
-  const existingRules = await alertsRepository.findAllAlertRules({
-    skip: 0,
-    take: 1000,
-  });
-  const duplicateRule = existingRules.find(
-    (rule) => rule.rule_type === ruleData.rule_type && rule.active === true
+  const ruleExists = await alertRulesRepository.checkActiveRuleExists(
+    ruleData.rule_type
   );
 
-  if (duplicateRule) {
+  if (ruleExists) {
     throw new Error(
       `An active rule of type '${ruleData.rule_type}' already exists`
     );
   }
 
-  return await alertsRepository.createAlertRule(ruleData);
+  return await alertRulesRepository.createAlertRule(ruleData);
 };
 
 // Update alert rule with validation
 const updateAlertRule = async (id, ruleData) => {
-  const existingRule = await alertsRepository.findAlertRuleById(id);
+  const existingRule = await alertRulesRepository.findAlertRuleById(id);
   if (!existingRule) {
     throw new Error("Alert rule not found");
   }
@@ -96,80 +92,63 @@ const updateAlertRule = async (id, ruleData) => {
     }
 
     // Check for duplicate active rules (excluding current rule)
-    const existingRules = await alertsRepository.findAllAlertRules({
-      skip: 0,
-      take: 1000,
-    });
-    const duplicateRule = existingRules.find(
-      (rule) =>
-        rule.id !== parseInt(id) &&
-        rule.rule_type === ruleData.rule_type &&
-        rule.active === true
+    const ruleExists = await alertRulesRepository.checkActiveRuleExists(
+      ruleData.rule_type,
+      id
     );
 
-    if (duplicateRule) {
+    if (ruleExists) {
       throw new Error(
         `An active rule of type '${ruleData.rule_type}' already exists`
       );
     }
   }
 
-  return await alertsRepository.updateAlertRule(id, ruleData);
+  return await alertRulesRepository.updateAlertRule(id, ruleData);
 };
 
 // Delete alert rule
 const deleteAlertRule = async (id) => {
-  const rule = await alertsRepository.findAlertRuleById(id);
-  if (!rule) {
+  const existingRule = await alertRulesRepository.findAlertRuleById(id);
+  if (!existingRule) {
     throw new Error("Alert rule not found");
   }
 
-  await alertsRepository.deleteAlertRule(id);
-  return { message: "Alert rule deleted successfully" };
+  return await alertRulesRepository.deleteAlertRule(id);
 };
 
 // Toggle alert rule status
 const toggleAlertRuleStatus = async (id) => {
-  const rule = await alertsRepository.findAlertRuleById(id);
-  if (!rule) {
+  const existingRule = await alertRulesRepository.findAlertRuleById(id);
+  if (!existingRule) {
     throw new Error("Alert rule not found");
   }
 
-  const newStatus = !rule.active;
+  const newStatus = !existingRule.active;
 
   // Check for duplicate active rules if activating
   if (newStatus) {
-    const existingRules = await alertsRepository.findAllAlertRules({
-      skip: 0,
-      take: 1000,
-    });
-    const duplicateRule = existingRules.find(
-      (existingRule) =>
-        existingRule.id !== parseInt(id) &&
-        existingRule.rule_type === rule.rule_type &&
-        existingRule.active === true
+    const ruleExists = await alertRulesRepository.checkActiveRuleExists(
+      existingRule.rule_type,
+      id
     );
 
-    if (duplicateRule) {
+    if (ruleExists) {
       throw new Error(
-        `An active rule of type '${rule.rule_type}' already exists`
+        `An active rule of type '${existingRule.rule_type}' already exists`
       );
     }
   }
 
-  return await alertsRepository.updateAlertRule(id, { active: newStatus });
+  return await alertRulesRepository.updateAlertRule(id, { active: newStatus });
 };
 
 // Get active alert rules
 const getActiveAlertRules = async () => {
-  const allRules = await alertsRepository.findAllAlertRules({
-    skip: 0,
-    take: 1000,
-  });
-  return allRules.filter((rule) => rule.active);
+  return await alertRulesRepository.findActiveAlertRules();
 };
 
-// Execute alert rules against orders
+// Execute alert rules and generate notifications
 const executeAlertRules = async () => {
   const activeRules = await getActiveAlertRules();
   const orders = await ordersRepository.findAll({
@@ -178,12 +157,14 @@ const executeAlertRules = async () => {
     filter: {},
   });
 
-  const createdAlerts = [];
+  const createdNotifications = [];
+  const notifiedUsers = new Set(); // Para evitar duplicados
 
   for (const rule of activeRules) {
     for (const order of orders) {
-      let shouldCreateAlert = false;
-      let alertMessage = "";
+      let shouldCreateNotification = false;
+      let notificationMessage = "";
+      let severity = "medium"; // low, medium, high
 
       switch (rule.rule_type) {
         case "NOT_DISPATCHED_IN_X_DAYS":
@@ -192,8 +173,17 @@ const executeAlertRules = async () => {
               (new Date() - new Date(order.created_at)) / (1000 * 60 * 60 * 24)
             );
             if (daysSinceCreation >= rule.threshold) {
-              shouldCreateAlert = true;
-              alertMessage = `Pedido ${order.id} ha estado en estado ${order.status} por ${daysSinceCreation} días (umbral: ${rule.threshold} días)`;
+              shouldCreateNotification = true;
+              notificationMessage = `Pedido ${order.id} ha estado en estado ${order.status} por ${daysSinceCreation} días (umbral: ${rule.threshold} días)`;
+
+              // Determinar severidad basada en días
+              if (daysSinceCreation >= rule.threshold * 2) {
+                severity = "high";
+              } else if (daysSinceCreation >= rule.threshold * 1.5) {
+                severity = "medium";
+              } else {
+                severity = "low";
+              }
             }
           }
           break;
@@ -205,81 +195,109 @@ const executeAlertRules = async () => {
             const isSameDay = orderDate.toDateString() === today.toDateString();
 
             if (isSameDay && today.getHours() >= 18) {
-              shouldCreateAlert = true;
-              alertMessage = `Pedido ${order.id} creado hoy no ha sido entregado (estado actual: ${order.status})`;
+              shouldCreateNotification = true;
+              notificationMessage = `Pedido ${order.id} creado hoy no ha sido entregado (estado actual: ${order.status})`;
+              severity = "high"; // Pedidos no entregados el mismo día son críticos
             }
           }
           break;
       }
 
-      if (shouldCreateAlert) {
-        // Check if alert already exists for this order and rule type
-        const existingAlerts = await alertsRepository.findAlertsByOrderId(
-          order.id
-        );
-        const alertExists = existingAlerts.some(
-          (alert) => alert.alert_type === rule.rule_type && !alert.resolved
-        );
+      if (shouldCreateNotification) {
+        // Crear notificación para el usuario específico si existe
+        if (order.user_id) {
+          const userNotificationKey = `${order.user_id}_${rule.rule_type}_${order.id}`;
 
-        if (!alertExists) {
-          const newAlert = await alertsRepository.createAlert({
-            order_id: order.id,
-            alert_type: rule.rule_type,
-            message: alertMessage,
-          });
+          if (!notifiedUsers.has(userNotificationKey)) {
+            const userNotification =
+              await notificationsService.createNotification({
+                user_id: order.user_id,
+                type: "ALERT_GENERATED",
+                title: `🚨 Alerta: ${rule.rule_type}`,
+                message: notificationMessage,
+                data: {
+                  order_id: order.id,
+                  alert_type: rule.rule_type,
+                  severity: severity,
+                  days_since_creation:
+                    rule.rule_type === "NOT_DISPATCHED_IN_X_DAYS"
+                      ? Math.floor(
+                          (new Date() - new Date(order.created_at)) /
+                            (1000 * 60 * 60 * 24)
+                        )
+                      : null,
+                  customer_name: order.customer_name,
+                  order_status: order.status,
+                  threshold: rule.threshold,
+                },
+              });
 
-          createdAlerts.push(newAlert);
+            createdNotifications.push(userNotification);
+            notifiedUsers.add(userNotificationKey);
+          }
+        }
 
-          // Crear notificación automáticamente
-          await notificationsService.createAlertNotification(
-            newAlert,
-            order.user_id
-          );
-
-          // Enviar notificación administrativa
+        // Crear notificación administrativa
+        const adminNotification =
           await notificationsService.createAdminNotification(
-            `Alerta Automática: ${rule.rule_type}`,
-            alertMessage,
+            `👨‍💼 Alerta Automática: ${rule.rule_type}`,
+            notificationMessage,
             {
               order_id: order.id,
               rule_type: rule.rule_type,
               threshold: rule.threshold,
+              severity: severity,
+              customer_name: order.customer_name,
+              order_status: order.status,
+              user_id: order.user_id,
+              days_since_creation:
+                rule.rule_type === "NOT_DISPATCHED_IN_X_DAYS"
+                  ? Math.floor(
+                      (new Date() - new Date(order.created_at)) /
+                        (1000 * 60 * 60 * 24)
+                    )
+                  : null,
             }
           );
-        }
+
+        createdNotifications.push(adminNotification);
       }
     }
   }
 
   return {
     message: `Executed ${activeRules.length} active rules against ${orders.length} orders`,
-    createdAlerts: createdAlerts.length,
-    alerts: createdAlerts,
+    createdNotifications: createdNotifications.length,
+    notifications: createdNotifications,
+    summary: {
+      totalOrders: orders.length,
+      activeRules: activeRules.length,
+      notificationsSent: createdNotifications.length,
+      uniqueUsersNotified: notifiedUsers.size,
+    },
   };
 };
 
 // Get alert rule statistics
 const getAlertRuleStats = async () => {
-  const allRules = await alertsRepository.findAllAlertRules({
-    skip: 0,
-    take: 1000,
-  });
-  const activeRules = allRules.filter((rule) => rule.active);
-  const inactiveRules = allRules.filter((rule) => !rule.active);
+  return await alertRulesRepository.getAlertRuleStats();
+};
 
-  return {
-    total: allRules.length,
-    active: activeRules.length,
-    inactive: inactiveRules.length,
-    byType: {
-      NOT_DISPATCHED_IN_X_DAYS: allRules.filter(
-        (rule) => rule.rule_type === "NOT_DISPATCHED_IN_X_DAYS"
-      ).length,
-      NOT_DELIVERED_SAME_DAY: allRules.filter(
-        (rule) => rule.rule_type === "NOT_DELIVERED_SAME_DAY"
-      ).length,
-    },
-  };
+// Additional service functions using the new repository
+const getAlertRulesByType = async (ruleType) => {
+  return await alertRulesRepository.findAlertRulesByType(ruleType);
+};
+
+const getAlertRulesByUser = async (userId) => {
+  return await alertRulesRepository.findAlertRulesByUser(userId);
+};
+
+const searchAlertRules = async (searchTerm, options = {}) => {
+  return await alertRulesRepository.searchAlertRules(searchTerm, options);
+};
+
+const bulkUpdateAlertRules = async (updates) => {
+  return await alertRulesRepository.bulkUpdateAlertRules(updates);
 };
 
 module.exports = {
@@ -292,4 +310,8 @@ module.exports = {
   getActiveAlertRules,
   executeAlertRules,
   getAlertRuleStats,
+  getAlertRulesByType,
+  getAlertRulesByUser,
+  searchAlertRules,
+  bulkUpdateAlertRules,
 };

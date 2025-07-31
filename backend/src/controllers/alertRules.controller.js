@@ -143,6 +143,30 @@ const deleteAlertRule = async (req, res) => {
   }
 };
 
+// Update alert rule threshold
+const updateAlertRuleThreshold = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { threshold } = req.body;
+    const rule = await alertRulesService.updateAlertRuleThreshold(
+      id,
+      threshold
+    );
+
+    res.json({
+      message: "Alert rule threshold updated successfully",
+      success: true,
+      data: rule,
+    });
+  } catch (error) {
+    console.error("Error updating alert rule threshold:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to update alert rule threshold",
+    });
+  }
+};
+
 // Toggle alert rule status
 const toggleAlertRuleStatus = async (req, res) => {
   try {
@@ -241,5 +265,6 @@ module.exports = {
   toggleAlertRuleStatus,
   getActiveAlertRules,
   executeAlertRules,
+  updateAlertRuleThreshold,
   getAlertRuleStats,
 };

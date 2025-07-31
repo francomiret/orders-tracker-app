@@ -9,7 +9,6 @@ const findAll = ({ skip, take, filter }) => {
     },
     include: {
       events: { orderBy: { timestamp: "desc" } },
-      alerts: { where: { resolved: false } },
     },
     orderBy: { created_at: "desc" },
   });
@@ -20,7 +19,6 @@ const findById = (id) => {
     where: { id },
     include: {
       events: { orderBy: { timestamp: "desc" } },
-      alerts: { orderBy: { triggered_at: "desc" } },
     },
   });
 };
@@ -95,13 +93,6 @@ const findEventsByOrderId = (orderId) => {
   });
 };
 
-const findAlertsByOrderId = (orderId) => {
-  return prisma.alert.findMany({
-    where: { order_id: orderId },
-    orderBy: { triggered_at: "desc" },
-  });
-};
-
 const count = (filter) => {
   return prisma.order.count({
     where: {
@@ -110,38 +101,36 @@ const count = (filter) => {
   });
 };
 
-// Método para obtener estadísticas de eventos por orden
 const getOrderEventStats = async (orderId) => {
   const events = await prisma.orderEvent.findMany({
     where: { order_id: orderId },
     orderBy: { timestamp: "asc" },
   });
 
-  const eventCounts = events.reduce((acc, event) => {
-    acc[event.event_type] = (acc[event.event_type] || 0) + 1;
-    return acc;
-  }, {});
-
-  return {
+  const stats = {
     totalEvents: events.length,
-    eventCounts,
-    firstEvent: events[0],
-    lastEvent: events[events.length - 1],
-    events: events,
+    eventTypes: {},
+    timeline: events.map((event) => ({
+      event_type: event.event_type,
+      timestamp: event.timestamp,
+      user_id: event.user_id,
+    })),
   };
+
+  events.forEach((event) => {
+    stats.eventTypes[event.event_type] =
+      (stats.eventTypes[event.event_type] || 0) + 1;
+  });
+
+  return stats;
 };
 
-// Método para verificar si un evento específico ya existe
 const eventExists = async (orderId, eventType, eventId) => {
   const existingEvent = await prisma.orderEvent.findFirst({
     where: {
-      OR: [
-        { event_id: eventId },
-        {
-          order_id: orderId,
-          event_type: eventType,
-        },
-      ],
+      order_id: orderId,
+      event_type: eventType,
+      event_id: eventId,
     },
   });
 
@@ -158,7 +147,6 @@ module.exports = {
   update,
   deleteById,
   findEventsByOrderId,
-  findAlertsByOrderId,
   count,
   getOrderEventStats,
   eventExists,
