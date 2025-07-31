@@ -1,179 +1,121 @@
 const ordersService = require("../services/orders.service");
 
-// Get all orders
-const getAllOrders = async (req, res) => {
+// Get all orders with pagination
+const getAllOrders = async (req, res, next) => {
   try {
     const result = await ordersService.getAllOrders(req.query);
-
-    res.json({
-      success: true,
-      data: result.orders,
-      pagination: result.pagination,
-    });
+    res.json(result);
   } catch (error) {
-    console.error("Error fetching orders:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch orders",
-    });
+    next(error);
   }
 };
 
 // Get order by ID
-const getOrderById = async (req, res) => {
+const getOrderById = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const order = await ordersService.getOrderById(id);
-
-    res.json({
-      success: true,
-      data: order,
-    });
+    const order = await ordersService.getOrderById(req.params.id);
+    res.json(order);
   } catch (error) {
-    console.error("Error fetching order:", error);
-    if (error.message === "Order not found") {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch order",
-    });
+    next(error);
   }
 };
 
 // Create new order
-const createOrder = async (req, res) => {
+const createOrder = async (req, res, next) => {
   try {
-    const { customer_name } = req.body;
-    const order = await ordersService.createOrder({ customer_name });
-
-    res.status(201).json({
-      success: true,
-      data: order,
-    });
+    const order = await ordersService.createOrder(req.body);
+    res.status(201).json(order);
   } catch (error) {
-    console.error("Error creating order:", error);
-    if (error.message === "Customer name is required") {
-      return res.status(400).json({
-        success: false,
-        error: "Customer name is required",
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: "Failed to create order",
-    });
+    next(error);
   }
 };
 
-// Update order status
-const updateOrderStatus = async (req, res) => {
+// Update order status with business rules validation
+const updateOrderStatus = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const order = await ordersService.updateOrderStatus(id, status);
-
-    res.json({
-      success: true,
-      data: order,
-    });
+    const { status, eventId } = req.body;
+    const result = await ordersService.updateOrderStatus(
+      req.params.id,
+      status,
+      eventId
+    );
+    res.json(result);
   } catch (error) {
-    console.error("Error updating order:", error);
-    if (error.message === "Order not found") {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
-    }
-    if (error.message.includes("Invalid status")) {
+    next(error);
+  }
+};
+
+// Process status change event with idempotency
+const processStatusChangeEvent = async (req, res, next) => {
+  try {
+    const { status, eventId } = req.body;
+
+    if (!eventId) {
       return res.status(400).json({
-        success: false,
-        error: error.message,
+        error: "eventId is required for idempotent event processing",
       });
     }
-    res.status(500).json({
-      success: false,
-      error: "Failed to update order",
-    });
+
+    const result = await ordersService.processStatusChangeEvent(
+      req.params.id,
+      status,
+      eventId
+    );
+    res.json(result);
+  } catch (error) {
+    next(error);
   }
 };
 
 // Delete order
-const deleteOrder = async (req, res) => {
+const deleteOrder = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const result = await ordersService.deleteOrder(id);
-
-    res.json({
-      success: true,
-      message: result.message,
-    });
+    const result = await ordersService.deleteOrder(req.params.id);
+    res.json(result);
   } catch (error) {
-    console.error("Error deleting order:", error);
-    if (error.message === "Order not found") {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: "Failed to delete order",
-    });
+    next(error);
   }
 };
 
-// Get order events
-const getOrderEvents = async (req, res) => {
+// Get order events for audit trail
+const getOrderEvents = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const events = await ordersService.getOrderEvents(id);
-
-    res.json({
-      success: true,
-      data: events,
-    });
+    const events = await ordersService.getOrderEvents(req.params.id);
+    res.json(events);
   } catch (error) {
-    console.error("Error fetching order events:", error);
-    if (error.message === "Order not found") {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch order events",
-    });
+    next(error);
   }
 };
 
 // Get order alerts
-const getOrderAlerts = async (req, res) => {
+const getOrderAlerts = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const alerts = await ordersService.getOrderAlerts(id);
-
-    res.json({
-      success: true,
-      data: alerts,
-    });
+    const alerts = await ordersService.getOrderAlerts(req.params.id);
+    res.json(alerts);
   } catch (error) {
-    console.error("Error fetching order alerts:", error);
-    if (error.message === "Order not found") {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch order alerts",
-    });
+    next(error);
+  }
+};
+
+// Get complete order status history
+const getOrderStatusHistory = async (req, res, next) => {
+  try {
+    const history = await ordersService.getOrderStatusHistory(req.params.id);
+    res.json(history);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Validate order status integrity
+const validateOrderStatusIntegrity = async (req, res, next) => {
+  try {
+    const validation = await ordersService.validateOrderStatusIntegrity(
+      req.params.id
+    );
+    res.json(validation);
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -182,7 +124,10 @@ module.exports = {
   getOrderById,
   createOrder,
   updateOrderStatus,
+  processStatusChangeEvent,
   deleteOrder,
   getOrderEvents,
   getOrderAlerts,
+  getOrderStatusHistory,
+  validateOrderStatusIntegrity,
 };

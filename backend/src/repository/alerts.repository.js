@@ -41,7 +41,7 @@ const findUnresolvedAlerts = ({ skip, take }) => {
 
 const findAlertById = (id) => {
   return prisma.alert.findUnique({
-    where: { id: parseInt(id) },
+    where: { id: id },
     include: {
       order: {
         select: {
@@ -75,7 +75,7 @@ const createAlert = (data) => {
 
 const updateAlert = (id, data) => {
   return prisma.alert.update({
-    where: { id: parseInt(id) },
+    where: { id: id },
     data,
     include: {
       order: {
@@ -91,7 +91,7 @@ const updateAlert = (id, data) => {
 
 const resolveAlert = (id) => {
   return prisma.alert.update({
-    where: { id: parseInt(id) },
+    where: { id: id },
     data: { resolved: true },
     include: {
       order: {
@@ -107,7 +107,7 @@ const resolveAlert = (id) => {
 
 const deleteAlert = (id) => {
   return prisma.alert.delete({
-    where: { id: parseInt(id) },
+    where: { id: id },
   });
 };
 
@@ -136,7 +136,7 @@ const findAllAlertRules = ({ skip, take }) => {
 
 const findAlertRuleById = (id) => {
   return prisma.alertRule.findUnique({
-    where: { id: parseInt(id) },
+    where: { id: id },
   });
 };
 
@@ -151,14 +151,14 @@ const createAlertRule = (data) => {
 
 const updateAlertRule = (id, data) => {
   return prisma.alertRule.update({
-    where: { id: parseInt(id) },
+    where: { id: id },
     data,
   });
 };
 
 const deleteAlertRule = (id) => {
   return prisma.alertRule.delete({
-    where: { id: parseInt(id) },
+    where: { id: id },
   });
 };
 

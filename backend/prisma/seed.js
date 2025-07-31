@@ -44,15 +44,16 @@ async function main() {
     data: {
       customer_name: "Bob Johnson",
       status: "DISPATCHED",
+      estimated_delivery_date: new Date(2025, 7, 21),
       events: {
         create: [
           {
             event_type: "CREATED",
-            timestamp: new Date(Date.now() - 7200000), // 2 hours ago
+            timestamp: new Date(Date.now() - 7200000),
           },
           {
             event_type: "PREPARING",
-            timestamp: new Date(Date.now() - 3600000), // 1 hour ago
+            timestamp: new Date(Date.now() - 3600000),
           },
           {
             event_type: "DISPATCHED",

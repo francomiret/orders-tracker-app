@@ -8,6 +8,8 @@ const {
   deleteOrder,
   getOrderEvents,
   getOrderAlerts,
+  getOrderStatusHistory,
+  validateOrderStatusIntegrity,
 } = require("../controllers/orders.controller");
 
 /**
@@ -67,6 +69,9 @@ const {
  *           type: string
  *           format: date-time
  *           description: Event timestamp
+ *         event_id:
+ *           type: string
+ *           description: Unique event identifier for idempotency
  *     CreateOrderRequest:
  *       type: object
  *       required:
@@ -89,12 +94,53 @@ const {
  *           type: string
  *           enum: [CREATED, PREPARING, DISPATCHED, DELIVERED]
  *           description: New order status
+ *         eventId:
+ *           type: string
+ *           description: Optional unique event ID for idempotency
+ *     OrderStatusHistory:
+ *       type: object
+ *       properties:
+ *         orderId:
+ *           type: string
+ *           description: Order ID
+ *         currentStatus:
+ *           type: string
+ *           description: Current order status
+ *         statusHistory:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *               timestamp:
+ *                 type: string
+ *                 format: date-time
+ *               eventId:
+ *                 type: string
+ *     StatusIntegrityValidation:
+ *       type: object
+ *       properties:
+ *         orderId:
+ *           type: string
+ *         isValid:
+ *           type: boolean
+ *         violations:
+ *           type: array
+ *           items:
+ *             type: object
+ *             properties:
+ *               event:
+ *                 type: string
+ *               timestamp:
+ *                 type: string
+ *                 format: date-time
+ *               issue:
+ *                 type: string
+ 
  *     Error:
  *       type: object
  *       properties:
- *         success:
- *           type: boolean
- *           example: false
  *         error:
  *           type: string
  *           description: Error message
@@ -117,23 +163,13 @@ const {
  *           type: integer
  *           description: Total number of pages
  *           example: 3
- *     SuccessResponse:
- *       type: object
- *       properties:
- *         success:
- *           type: boolean
- *           example: true
- *         data:
- *           description: Response data
- *         pagination:
- *           $ref: '#/components/schemas/PaginationInfo'
  */
 
 /**
  * @swagger
  * tags:
  *   name: Orders
- *   description: Order management endpoints
+ *   description: Order management endpoints with business rules
  */
 
 /**
@@ -172,10 +208,7 @@ const {
  *             schema:
  *               type: object
  *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
+ *                 orders:
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Order'
@@ -211,13 +244,7 @@ router.get("/", getAllOrders);
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Order'
+ *               $ref: '#/components/schemas/Order'
  *       404:
  *         description: Order not found
  *         content:
@@ -255,13 +282,7 @@ router.get("/:id", getOrderById);
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Order'
+ *               $ref: '#/components/schemas/Order'
  *       400:
  *         description: Invalid request data or validation error
  *         content:
@@ -282,7 +303,7 @@ router.post("/", createOrder);
  * /orders/{id}/status:
  *   patch:
  *     summary: Update order status
- *     description: Update the status of an order and automatically create a corresponding event
+ *     description: Update the status of an order with business rules validation (sequential progression, idempotency)
  *     tags: [Orders]
  *     parameters:
  *       - in: path
@@ -300,6 +321,7 @@ router.post("/", createOrder);
  *             $ref: '#/components/schemas/UpdateOrderStatusRequest'
  *           example:
  *             status: "PREPARING"
+ *             eventId: "optional-unique-event-id"
  *     responses:
  *       200:
  *         description: Order status updated successfully
@@ -308,13 +330,16 @@ router.post("/", createOrder);
  *             schema:
  *               type: object
  *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Order'
+ *                 id:
+ *                   type: string
+ *                 status:
+ *                   type: string
+ *                 message:
+ *                   type: string
+ *                 eventId:
+ *                   type: string
  *       400:
- *         description: Invalid status value or validation error
+ *         description: Invalid status value, invalid transition, or validation error
  *         content:
  *           application/json:
  *             schema:
@@ -357,9 +382,6 @@ router.patch("/:id/status", updateOrderStatus);
  *             schema:
  *               type: object
  *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
  *                 message:
  *                   type: string
  *                   example: "Order deleted successfully"
@@ -383,7 +405,7 @@ router.delete("/:id", deleteOrder);
  * /orders/{id}/events:
  *   get:
  *     summary: Get order events
- *     description: Retrieve all events for a specific order
+ *     description: Retrieve all events for a specific order (audit trail)
  *     tags: [Orders]
  *     parameters:
  *       - in: path
@@ -399,15 +421,9 @@ router.delete("/:id", deleteOrder);
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/OrderEvent'
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/OrderEvent'
  *       404:
  *         description: Order not found
  *         content:
@@ -444,15 +460,9 @@ router.get("/:id/events", getOrderEvents);
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Alert'
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Alert'
  *       404:
  *         description: Order not found
  *         content:
@@ -467,5 +477,79 @@ router.get("/:id/events", getOrderEvents);
  *               $ref: '#/components/schemas/Error'
  */
 router.get("/:id/alerts", getOrderAlerts);
+
+/**
+ * @swagger
+ * /orders/{id}/status-history:
+ *   get:
+ *     summary: Get order status history
+ *     description: Retrieve complete status change history for an order with timestamps and event IDs
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID (CUID)
+ *         example: "cmdqjzodn0000y1i251v4cjj4"
+ *     responses:
+ *       200:
+ *         description: Order status history retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OrderStatusHistory'
+ *       404:
+ *         description: Order not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get("/:id/status-history", getOrderStatusHistory);
+
+/**
+ * @swagger
+ * /orders/{id}/validate-integrity:
+ *   get:
+ *     summary: Validate order status integrity
+ *     description: Validate that the order's status progression follows the sequential business rules
+ *     tags: [Orders]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Order ID (CUID)
+ *         example: "cmdqjzodn0000y1i251v4cjj4"
+ *     responses:
+ *       200:
+ *         description: Order status integrity validation completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/StatusIntegrityValidation'
+ *       404:
+ *         description: Order not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get("/:id/validate-integrity", validateOrderStatusIntegrity);
 
 module.exports = router;
