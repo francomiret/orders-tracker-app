@@ -7,7 +7,14 @@ require("dotenv").config();
 
 // Import configurations and middleware
 const swaggerSpecs = require("./config/swagger");
-const errorHandler = require("./middleware/errorHandler");
+const {
+  errorHandler,
+  notFoundHandler,
+  validationErrorHandler,
+  databaseErrorHandler,
+  rateLimitErrorHandler,
+  unhandledErrorHandler,
+} = require("./middleware/errorHandler");
 
 // Import routes
 const pingRoutes = require("./routes/ping");
@@ -74,16 +81,17 @@ app.get("/", (req, res) => {
   });
 });
 
-// 404 handler
-app.use("*", (req, res) => {
-  res.status(404).json({
-    success: false,
-    error: "Route not found",
-  });
-});
-
-// Error handling middleware (must be last)
+// Error handling middleware
+app.use(validationErrorHandler);
+app.use(databaseErrorHandler);
+app.use(rateLimitErrorHandler);
 app.use(errorHandler);
+
+// 404 handler (must be last)
+app.use(notFoundHandler);
+
+// Unhandled error handler (must be very last)
+app.use(unhandledErrorHandler);
 
 // Start server
 const PORT = process.env.PORT || 3000;

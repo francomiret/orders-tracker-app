@@ -1,4 +1,9 @@
 const alertRulesService = require("../services/alertRules.service");
+const {
+  formatErrorForResponse,
+  logErrorWithContext,
+  isOperationalError,
+} = require("../utils/errors");
 
 // Get all alert rules with pagination
 const getAllAlertRules = async (req, res) => {
@@ -11,11 +16,15 @@ const getAllAlertRules = async (req, res) => {
       pagination: result.pagination,
     });
   } catch (error) {
-    console.error("Error fetching alert rules:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch alert rules",
+    logErrorWithContext(error, { 
+      operation: "getAllAlertRules", 
+      query: req.query,
+      userAgent: req.get('User-Agent'),
+      ip: req.ip 
     });
+
+    const errorResponse = formatErrorForResponse(error);
+    res.status(errorResponse.statusCode).json(errorResponse);
   }
 };
 
@@ -30,17 +39,15 @@ const getAlertRuleById = async (req, res) => {
       data: rule,
     });
   } catch (error) {
-    console.error("Error fetching alert rule:", error);
-    if (error.message === "Alert rule not found") {
-      return res.status(404).json({
-        success: false,
-        error: "Alert rule not found",
-      });
-    }
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch alert rule",
+    logErrorWithContext(error, { 
+      operation: "getAlertRuleById", 
+      id: req.params.id,
+      userAgent: req.get('User-Agent'),
+      ip: req.ip 
     });
+
+    const errorResponse = formatErrorForResponse(error);
+    res.status(errorResponse.statusCode).json(errorResponse);
   }
 };
 

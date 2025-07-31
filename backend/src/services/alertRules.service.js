@@ -2,69 +2,116 @@ const alertRulesRepository = require("../repository/alertRules.repository");
 const ordersRepository = require("../repository/orders.repository");
 const { parsePagination } = require("../utils/pagination");
 const notificationsService = require("./notifications.service");
+const {
+  AlertRuleError,
+  AlertRuleNotFoundError,
+  AlertRuleValidationError,
+  AlertRuleDuplicateError,
+  ServiceError,
+  ValidationError,
+  logErrorWithContext,
+} = require("../utils/errors");
 
 // Get all alert rules with pagination
 const getAllAlertRules = async (query) => {
-  const { skip, take } = parsePagination(query);
+  try {
+    const { skip, take } = parsePagination(query);
 
-  const [rules, totalCount] = await Promise.all([
-    alertRulesRepository.findAllAlertRules({ skip, take }),
-    alertRulesRepository.countAlertRules(),
-  ]);
+    const [rules, totalCount] = await Promise.all([
+      alertRulesRepository.findAllAlertRules({ skip, take }),
+      alertRulesRepository.countAlertRules(),
+    ]);
 
-  return {
-    rules,
-    pagination: {
-      page: parseInt(query.page) || 1,
-      limit: parseInt(query.limit) || 10,
-      total: totalCount,
-      totalPages: Math.ceil(totalCount / (parseInt(query.limit) || 10)),
-    },
-  };
+    return {
+      rules,
+      pagination: {
+        page: parseInt(query.page) || 1,
+        limit: parseInt(query.limit) || 10,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / (parseInt(query.limit) || 10)),
+      },
+    };
+  } catch (error) {
+    logErrorWithContext(error, { operation: "getAllAlertRules", query });
+    throw new ServiceError("Failed to get alert rules", "alertRules");
+  }
 };
 
 // Get alert rule by ID
 const getAlertRuleById = async (id) => {
-  const rule = await alertRulesRepository.findAlertRuleById(id);
-  if (!rule) {
-    throw new Error("Alert rule not found");
+  try {
+    if (!id) {
+      throw new ValidationError("Alert rule ID is required", "id");
+    }
+
+    const rule = await alertRulesRepository.findAlertRuleById(id);
+    return rule;
+  } catch (error) {
+    if (
+      error instanceof AlertRuleNotFoundError ||
+      error instanceof ValidationError
+    ) {
+      throw error;
+    }
+
+    logErrorWithContext(error, { operation: "getAlertRuleById", id });
+    throw new ServiceError("Failed to get alert rule by ID", "alertRules");
   }
-  return rule;
 };
 
 // Create alert rule with validation
 const createAlertRule = async (ruleData) => {
-  // Validate required fields
-  if (!ruleData.rule_type) {
-    throw new Error("Rule type is required");
-  }
-  if (ruleData.threshold === undefined || ruleData.threshold === null) {
-    throw new Error("Threshold is required");
-  }
-  if (ruleData.threshold <= 0) {
-    throw new Error("Threshold must be greater than 0");
-  }
+  try {
+    // Validate required fields
+    if (!ruleData.rule_type) {
+      throw new ValidationError("Rule type is required", "rule_type");
+    }
 
-  // Validate rule type
-  const validRuleTypes = ["NOT_DISPATCHED_IN_X_DAYS", "NOT_DELIVERED_SAME_DAY"];
-  if (!validRuleTypes.includes(ruleData.rule_type)) {
-    throw new Error(
-      "Invalid rule type. Must be one of: NOT_DISPATCHED_IN_X_DAYS, NOT_DELIVERED_SAME_DAY"
+    if (ruleData.threshold === undefined || ruleData.threshold === null) {
+      throw new ValidationError("Threshold is required", "threshold");
+    }
+
+    if (ruleData.threshold <= 0) {
+      throw new ValidationError(
+        "Threshold must be greater than 0",
+        "threshold"
+      );
+    }
+
+    // Validate rule type
+    const validRuleTypes = [
+      "NOT_DISPATCHED_IN_X_DAYS",
+      "NOT_DELIVERED_SAME_DAY",
+    ];
+    if (!validRuleTypes.includes(ruleData.rule_type)) {
+      throw new ValidationError(
+        "Invalid rule type. Must be one of: NOT_DISPATCHED_IN_X_DAYS, NOT_DELIVERED_SAME_DAY",
+        "rule_type"
+      );
+    }
+
+    // Check if rule already exists
+    const ruleExists = await alertRulesRepository.checkActiveRuleExists(
+      ruleData.rule_type
     );
+
+    if (ruleExists) {
+      throw new AlertRuleDuplicateError(ruleData.rule_type);
+    }
+
+    const rule = await alertRulesRepository.createAlertRule(ruleData);
+    return rule;
+  } catch (error) {
+    if (
+      error instanceof ValidationError ||
+      error instanceof AlertRuleDuplicateError
+    ) {
+      throw error;
+    }
+
+    logErrorWithContext(error, { operation: "createAlertRule", ruleData });
+    throw new ServiceError("Failed to create alert rule", "alertRules");
   }
-
-  // Check if rule already exists
-  const ruleExists = await alertRulesRepository.checkActiveRuleExists(
-    ruleData.rule_type
-  );
-
-  if (ruleExists) {
-    throw new Error(
-      `An active rule of type '${ruleData.rule_type}' already exists`
-    );
-  }
-
-  return await alertRulesRepository.createAlertRule(ruleData);
 };
 
 // Update alert rule with validation
