@@ -18,7 +18,6 @@ model Order {
   user_id                 String?
 
   events OrderEvent[]
-  alerts Alert[]
 
   @@map("orders")
 }
@@ -38,27 +37,15 @@ model OrderEvent {
 }
 
 model AlertRule {
-  id        Int           @id @default(autoincrement())
-  rule_type AlertRuleType
-  threshold Int
-  active    Boolean       @default(true)
-  user_id   String?
+  id         Int           @id @default(autoincrement())
+  rule_type  AlertRuleType
+  threshold  Int
+  active     Boolean       @default(true)
+  user_id    String?
+  created_at DateTime      @default(now()) @map("created_at")
+  updated_at DateTime      @updatedAt @map("updated_at")
 
   @@map("alert_rules")
-}
-
-model Alert {
-  id           Int      @id @default(autoincrement())
-  order_id     String
-  alert_type   String
-  message      String
-  triggered_at DateTime @default(now()) @map("triggered_at")
-  resolved     Boolean  @default(false)
-  user_id      String?
-
-  order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
-
-  @@map("alerts")
 }
 
 model Notification {
