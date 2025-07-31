@@ -1,49 +1,21 @@
 const express = require("express");
 const router = express.Router();
 const {
-  getAllAlerts,
-  getUnresolvedAlerts,
-  resolveAlert,
-  createAlert,
   getAllAlertRules,
+  getAlertRuleById,
   createAlertRule,
   updateAlertRule,
   deleteAlertRule,
-} = require("../controllers/alerts.controller");
+  toggleAlertRuleStatus,
+  getActiveAlertRules,
+  executeAlertRules,
+  getAlertRuleStats,
+} = require("../controllers/alertRules.controller");
 
 /**
  * @swagger
  * components:
  *   schemas:
- *     Alert:
- *       type: object
- *       properties:
- *         id:
- *           type: integer
- *           description: Alert ID
- *           example: 1
- *         order_id:
- *           type: string
- *           description: Order ID (CUID)
- *           example: "cmdqjzodn0000y1i251v4cjj4"
- *         alert_type:
- *           type: string
- *           description: Type of alert
- *           example: "DELAYED_PREPARATION"
- *         message:
- *           type: string
- *           description: Alert message
- *           example: "Order has been in CREATED status for more than 1 hour"
- *         triggered_at:
- *           type: string
- *           format: date-time
- *           description: When alert was triggered
- *         resolved:
- *           type: boolean
- *           description: Whether alert is resolved
- *           example: false
- *         order:
- *           $ref: '#/components/schemas/OrderSummary'
  *     AlertRule:
  *       type: object
  *       properties:
@@ -64,38 +36,6 @@ const {
  *           type: boolean
  *           description: Whether rule is active
  *           example: true
- *     OrderSummary:
- *       type: object
- *       properties:
- *         id:
- *           type: string
- *           description: Order ID
- *         customer_name:
- *           type: string
- *           description: Customer name
- *         status:
- *           type: string
- *           enum: [CREATED, PREPARING, DISPATCHED, DELIVERED]
- *           description: Order status
- *     CreateAlertRequest:
- *       type: object
- *       required:
- *         - order_id
- *         - alert_type
- *         - message
- *       properties:
- *         order_id:
- *           type: string
- *           description: Order ID (CUID)
- *           example: "cmdqjzodn0000y1i251v4cjj4"
- *         alert_type:
- *           type: string
- *           description: Type of alert
- *           example: "DELAYED_PREPARATION"
- *         message:
- *           type: string
- *           description: Alert message
- *           example: "Order has been in CREATED status for more than 1 hour"
  *     CreateAlertRuleRequest:
  *       type: object
  *       required:
@@ -129,263 +69,64 @@ const {
  *         active:
  *           type: boolean
  *           description: Whether rule is active
- *     Error:
+ *     AlertRuleStats:
  *       type: object
  *       properties:
- *         success:
- *           type: boolean
- *           example: false
- *         error:
- *           type: string
- *           description: Error message
- *     PaginationInfo:
- *       type: object
- *       properties:
- *         page:
- *           type: integer
- *           description: Current page number
- *           example: 1
- *         limit:
- *           type: integer
- *           description: Number of items per page
- *           example: 10
  *         total:
  *           type: integer
- *           description: Total number of items
- *           example: 25
- *         totalPages:
+ *           description: Total number of rules
+ *           example: 5
+ *         active:
  *           type: integer
- *           description: Total number of pages
+ *           description: Number of active rules
  *           example: 3
- *     SuccessResponse:
+ *         inactive:
+ *           type: integer
+ *           description: Number of inactive rules
+ *           example: 2
+ *         byType:
+ *           type: object
+ *           properties:
+ *             NOT_DISPATCHED_IN_X_DAYS:
+ *               type: integer
+ *               description: Number of NOT_DISPATCHED_IN_X_DAYS rules
+ *               example: 3
+ *             NOT_DELIVERED_SAME_DAY:
+ *               type: integer
+ *               description: Number of NOT_DELIVERED_SAME_DAY rules
+ *               example: 2
+ *     ExecuteAlertRulesResponse:
  *       type: object
  *       properties:
- *         success:
- *           type: boolean
- *           example: true
- *         data:
- *           description: Response data
- *         pagination:
- *           $ref: '#/components/schemas/PaginationInfo'
+ *         message:
+ *           type: string
+ *           description: Execution summary
+ *           example: "Executed 3 active rules against 25 orders"
+ *         createdAlerts:
+ *           type: integer
+ *           description: Number of alerts created
+ *           example: 5
+ *         alerts:
+ *           type: array
+ *           items:
+ *             $ref: '#/components/schemas/Alert'
+ *           description: Array of created alerts
  */
 
 /**
  * @swagger
  * tags:
- *   name: Alerts
- *   description: Alert and alert rule management endpoints
+ *   name: Alert Rules
+ *   description: Alert rule management and execution endpoints
  */
 
 /**
  * @swagger
- * /alerts:
- *   get:
- *     summary: Get all alerts
- *     description: Retrieve a list of all alerts with order information
- *     tags: [Alerts]
- *     parameters:
- *       - in: query
- *         name: resolved
- *         schema:
- *           type: boolean
- *         description: Filter alerts by resolved status (true/false)
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *           minimum: 1
- *         description: Page number for pagination
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *           minimum: 1
- *           maximum: 100
- *         description: Number of alerts per page
- *     responses:
- *       200:
- *         description: List of alerts retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Alert'
- *                 pagination:
- *                   $ref: '#/components/schemas/PaginationInfo'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.get("/", getAllAlerts);
-
-/**
- * @swagger
- * /alerts/unresolved:
- *   get:
- *     summary: Get unresolved alerts
- *     description: Retrieve a list of all unresolved alerts with order information
- *     tags: [Alerts]
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           default: 1
- *           minimum: 1
- *         description: Page number for pagination
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           default: 10
- *           minimum: 1
- *           maximum: 100
- *         description: Number of alerts per page
- *     responses:
- *       200:
- *         description: List of unresolved alerts retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Alert'
- *                 pagination:
- *                   $ref: '#/components/schemas/PaginationInfo'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.get("/unresolved", getUnresolvedAlerts);
-
-/**
- * @swagger
- * /alerts:
- *   post:
- *     summary: Create a new alert
- *     description: Create a new alert for an order
- *     tags: [Alerts]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateAlertRequest'
- *           example:
- *             order_id: "cmdqjzodn0000y1i251v4cjj4"
- *             alert_type: "DELAYED_PREPARATION"
- *             message: "Order has been in CREATED status for more than 1 hour"
- *     responses:
- *       201:
- *         description: Alert created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Alert'
- *       400:
- *         description: Invalid request data or validation error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       404:
- *         description: Order not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.post("/", createAlert);
-
-/**
- * @swagger
- * /alerts/{id}/resolve:
- *   patch:
- *     summary: Resolve an alert
- *     description: Mark an alert as resolved
- *     tags: [Alerts]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Alert ID
- *         example: 1
- *     responses:
- *       200:
- *         description: Alert resolved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/Alert'
- *       400:
- *         description: Alert is already resolved
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       404:
- *         description: Alert not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-router.patch("/:id/resolve", resolveAlert);
-
-/**
- * @swagger
- * /alerts/rules:
+ * /alert-rules:
  *   get:
  *     summary: Get all alert rules
  *     description: Retrieve a list of all alert rules with pagination
- *     tags: [Alerts]
+ *     tags: [Alert Rules]
  *     parameters:
  *       - in: query
  *         name: page
@@ -426,15 +167,108 @@ router.patch("/:id/resolve", resolveAlert);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get("/rules", getAllAlertRules);
+router.get("/", getAllAlertRules);
 
 /**
  * @swagger
- * /alerts/rules:
+ * /alert-rules/active:
+ *   get:
+ *     summary: Get active alert rules
+ *     description: Retrieve a list of all active alert rules
+ *     tags: [Alert Rules]
+ *     responses:
+ *       200:
+ *         description: Active alert rules retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/AlertRule'
+ *                 count:
+ *                   type: integer
+ *                   description: Number of active rules
+ *                   example: 3
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get("/active", getActiveAlertRules);
+
+/**
+ * @swagger
+ * /alert-rules/stats:
+ *   get:
+ *     summary: Get alert rule statistics
+ *     description: Retrieve statistics about alert rules
+ *     tags: [Alert Rules]
+ *     responses:
+ *       200:
+ *         description: Alert rule statistics retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/AlertRuleStats'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get("/stats", getAlertRuleStats);
+
+/**
+ * @swagger
+ * /alert-rules/execute:
+ *   post:
+ *     summary: Execute alert rules
+ *     description: Execute all active alert rules against existing orders and create alerts where conditions are met
+ *     tags: [Alert Rules]
+ *     responses:
+ *       200:
+ *         description: Alert rules executed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/ExecuteAlertRulesResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post("/execute", executeAlertRules);
+
+/**
+ * @swagger
+ * /alert-rules:
  *   post:
  *     summary: Create a new alert rule
  *     description: Create a new alert rule for monitoring orders
- *     tags: [Alerts]
+ *     tags: [Alert Rules]
  *     requestBody:
  *       required: true
  *       content:
@@ -471,15 +305,58 @@ router.get("/rules", getAllAlertRules);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.post("/rules", createAlertRule);
+router.post("/", createAlertRule);
 
 /**
  * @swagger
- * /alerts/rules/{id}:
+ * /alert-rules/{id}:
+ *   get:
+ *     summary: Get alert rule by ID
+ *     description: Retrieve a specific alert rule by its ID
+ *     tags: [Alert Rules]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Alert rule ID
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: Alert rule retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/AlertRule'
+ *       404:
+ *         description: Alert rule not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.get("/:id", getAlertRuleById);
+
+/**
+ * @swagger
+ * /alert-rules/{id}:
  *   put:
  *     summary: Update an alert rule
  *     description: Update an existing alert rule
- *     tags: [Alerts]
+ *     tags: [Alert Rules]
  *     parameters:
  *       - in: path
  *         name: id
@@ -530,15 +407,67 @@ router.post("/rules", createAlertRule);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.put("/rules/:id", updateAlertRule);
+router.put("/:id", updateAlertRule);
 
 /**
  * @swagger
- * /alerts/rules/{id}:
+ * /alert-rules/{id}/toggle:
+ *   patch:
+ *     summary: Toggle alert rule status
+ *     description: Toggle the active status of an alert rule
+ *     tags: [Alert Rules]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Alert rule ID
+ *         example: 1
+ *     responses:
+ *       200:
+ *         description: Alert rule status toggled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   $ref: '#/components/schemas/AlertRule'
+ *                 message:
+ *                   type: string
+ *                   example: "Alert rule activated successfully"
+ *       400:
+ *         description: Cannot activate rule - duplicate active rule exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Alert rule not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.patch("/:id/toggle", toggleAlertRuleStatus);
+
+/**
+ * @swagger
+ * /alert-rules/{id}:
  *   delete:
  *     summary: Delete an alert rule
  *     description: Delete an alert rule
- *     tags: [Alerts]
+ *     tags: [Alert Rules]
  *     parameters:
  *       - in: path
  *         name: id
@@ -574,6 +503,6 @@ router.put("/rules/:id", updateAlertRule);
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.delete("/rules/:id", deleteAlertRule);
+router.delete("/:id", deleteAlertRule);
 
 module.exports = router;

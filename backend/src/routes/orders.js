@@ -98,6 +98,25 @@ const {
  *         error:
  *           type: string
  *           description: Error message
+ *     PaginationInfo:
+ *       type: object
+ *       properties:
+ *         page:
+ *           type: integer
+ *           description: Current page number
+ *           example: 1
+ *         limit:
+ *           type: integer
+ *           description: Number of items per page
+ *           example: 10
+ *         total:
+ *           type: integer
+ *           description: Total number of items
+ *           example: 25
+ *         totalPages:
+ *           type: integer
+ *           description: Total number of pages
+ *           example: 3
  *     SuccessResponse:
  *       type: object
  *       properties:
@@ -106,9 +125,8 @@ const {
  *           example: true
  *         data:
  *           description: Response data
- *         count:
- *           type: integer
- *           description: Number of items returned
+ *         pagination:
+ *           $ref: '#/components/schemas/PaginationInfo'
  */
 
 /**
@@ -123,27 +141,29 @@ const {
  * /orders:
  *   get:
  *     summary: Get all orders
- *     description: Retrieve a list of all orders with their events and unresolved alerts
+ *     description: Retrieve a list of all orders with their events and unresolved alerts, with pagination support
  *     tags: [Orders]
  *     parameters:
  *       - in: query
- *         name: status
+ *         name: customer_name
  *         schema:
  *           type: string
- *           enum: [CREATED, PREPARING, DISPATCHED, DELIVERED]
- *         description: Filter orders by status
+ *         description: Filter orders by customer name
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *           minimum: 1
+ *         description: Page number for pagination
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
- *           default: 50
- *         description: Number of orders to return
- *       - in: query
- *         name: offset
- *         schema:
- *           type: integer
- *           default: 0
- *         description: Number of orders to skip
+ *           default: 10
+ *           minimum: 1
+ *           maximum: 100
+ *         description: Number of orders per page
  *     responses:
  *       200:
  *         description: List of orders retrieved successfully
@@ -159,9 +179,8 @@ const {
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Order'
- *                 count:
- *                   type: integer
- *                   description: Total number of orders
+ *                 pagination:
+ *                   $ref: '#/components/schemas/PaginationInfo'
  *       500:
  *         description: Internal server error
  *         content:
@@ -244,7 +263,7 @@ router.get("/:id", getOrderById);
  *                 data:
  *                   $ref: '#/components/schemas/Order'
  *       400:
- *         description: Invalid request data
+ *         description: Invalid request data or validation error
  *         content:
  *           application/json:
  *             schema:
@@ -295,7 +314,7 @@ router.post("/", createOrder);
  *                 data:
  *                   $ref: '#/components/schemas/Order'
  *       400:
- *         description: Invalid status value
+ *         description: Invalid status value or validation error
  *         content:
  *           application/json:
  *             schema:
