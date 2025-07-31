@@ -1,27 +1,14 @@
-const prisma = require("../config/prisma");
+const alertsService = require("../services/alerts.service");
 
 // Get all alerts
 const getAllAlerts = async (req, res) => {
   try {
-    const alerts = await prisma.alert.findMany({
-      include: {
-        order: {
-          select: {
-            id: true,
-            customer_name: true,
-            status: true,
-          },
-        },
-      },
-      orderBy: {
-        triggered_at: "desc",
-      },
-    });
+    const result = await alertsService.getAllAlerts(req.query);
 
     res.json({
       success: true,
-      data: alerts,
-      count: alerts.length,
+      data: result.alerts,
+      pagination: result.pagination,
     });
   } catch (error) {
     console.error("Error fetching alerts:", error);
@@ -35,28 +22,12 @@ const getAllAlerts = async (req, res) => {
 // Get unresolved alerts
 const getUnresolvedAlerts = async (req, res) => {
   try {
-    const alerts = await prisma.alert.findMany({
-      where: {
-        resolved: false,
-      },
-      include: {
-        order: {
-          select: {
-            id: true,
-            customer_name: true,
-            status: true,
-          },
-        },
-      },
-      orderBy: {
-        triggered_at: "desc",
-      },
-    });
+    const result = await alertsService.getUnresolvedAlerts(req.query);
 
     res.json({
       success: true,
-      data: alerts,
-      count: alerts.length,
+      data: result.alerts,
+      pagination: result.pagination,
     });
   } catch (error) {
     console.error("Error fetching unresolved alerts:", error);
@@ -71,20 +42,7 @@ const getUnresolvedAlerts = async (req, res) => {
 const resolveAlert = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const alert = await prisma.alert.update({
-      where: { id: parseInt(id) },
-      data: { resolved: true },
-      include: {
-        order: {
-          select: {
-            id: true,
-            customer_name: true,
-            status: true,
-          },
-        },
-      },
-    });
+    const alert = await alertsService.resolveAlert(id);
 
     res.json({
       success: true,
@@ -92,6 +50,18 @@ const resolveAlert = async (req, res) => {
     });
   } catch (error) {
     console.error("Error resolving alert:", error);
+    if (error.message === "Alert not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Alert not found",
+      });
+    }
+    if (error.message === "Alert is already resolved") {
+      return res.status(400).json({
+        success: false,
+        error: "Alert is already resolved",
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to resolve alert",
@@ -103,24 +73,10 @@ const resolveAlert = async (req, res) => {
 const createAlert = async (req, res) => {
   try {
     const { order_id, alert_type, message } = req.body;
-
-    const alert = await prisma.alert.create({
-      data: {
-        order_id,
-        alert_type,
-        message,
-        triggered_at: new Date(),
-        resolved: false,
-      },
-      include: {
-        order: {
-          select: {
-            id: true,
-            customer_name: true,
-            status: true,
-          },
-        },
-      },
+    const alert = await alertsService.createAlert({
+      order_id,
+      alert_type,
+      message,
     });
 
     res.status(201).json({
@@ -129,6 +85,12 @@ const createAlert = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating alert:", error);
+    if (error.message.includes("is required")) {
+      return res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to create alert",
@@ -139,16 +101,12 @@ const createAlert = async (req, res) => {
 // Get all alert rules
 const getAllAlertRules = async (req, res) => {
   try {
-    const rules = await prisma.alertRule.findMany({
-      orderBy: {
-        id: "asc",
-      },
-    });
+    const result = await alertsService.getAllAlertRules(req.query);
 
     res.json({
       success: true,
-      data: rules,
-      count: rules.length,
+      data: result.rules,
+      pagination: result.pagination,
     });
   } catch (error) {
     console.error("Error fetching alert rules:", error);
@@ -163,13 +121,10 @@ const getAllAlertRules = async (req, res) => {
 const createAlertRule = async (req, res) => {
   try {
     const { rule_type, threshold, active = true } = req.body;
-
-    const rule = await prisma.alertRule.create({
-      data: {
-        rule_type,
-        threshold,
-        active,
-      },
+    const rule = await alertsService.createAlertRule({
+      rule_type,
+      threshold,
+      active,
     });
 
     res.status(201).json({
@@ -178,6 +133,12 @@ const createAlertRule = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating alert rule:", error);
+    if (error.message.includes("is required")) {
+      return res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to create alert rule",
@@ -190,14 +151,10 @@ const updateAlertRule = async (req, res) => {
   try {
     const { id } = req.params;
     const { rule_type, threshold, active } = req.body;
-
-    const rule = await prisma.alertRule.update({
-      where: { id: parseInt(id) },
-      data: {
-        rule_type,
-        threshold,
-        active,
-      },
+    const rule = await alertsService.updateAlertRule(id, {
+      rule_type,
+      threshold,
+      active,
     });
 
     res.json({
@@ -206,6 +163,12 @@ const updateAlertRule = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating alert rule:", error);
+    if (error.message === "Alert rule not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Alert rule not found",
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to update alert rule",
@@ -217,17 +180,20 @@ const updateAlertRule = async (req, res) => {
 const deleteAlertRule = async (req, res) => {
   try {
     const { id } = req.params;
-
-    await prisma.alertRule.delete({
-      where: { id: parseInt(id) },
-    });
+    const result = await alertsService.deleteAlertRule(id);
 
     res.json({
       success: true,
-      message: "Alert rule deleted successfully",
+      message: result.message,
     });
   } catch (error) {
     console.error("Error deleting alert rule:", error);
+    if (error.message === "Alert rule not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Alert rule not found",
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to delete alert rule",

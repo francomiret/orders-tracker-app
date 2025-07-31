@@ -9,7 +9,7 @@ const {
   createAlertRule,
   updateAlertRule,
   deleteAlertRule,
-} = require("../controllers/alertsController");
+} = require("../controllers/alerts.controller");
 
 /**
  * @swagger
