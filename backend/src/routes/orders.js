@@ -36,6 +36,11 @@ const {
  *           enum: [CREATED, PREPARING, DISPATCHED, DELIVERED]
  *           description: Current order status
  *           example: "CREATED"
+ *         estimated_delivery_date:
+ *           type: string
+ *           format: date-time
+ *           description: Estimated delivery date (optional)
+ *           example: "2024-08-02T15:00:00.000Z"
  *         created_at:
  *           type: string
  *           format: date-time
@@ -44,6 +49,10 @@ const {
  *           type: string
  *           format: date-time
  *           description: Last update timestamp
+ *         user_id:
+ *           type: string
+ *           description: User ID associated with the order (optional)
+ *           example: "user-123"
  *         events:
  *           type: array
  *           items:
@@ -72,6 +81,9 @@ const {
  *         event_id:
  *           type: string
  *           description: Unique event identifier for idempotency
+ *         user_id:
+ *           type: string
+ *           description: User ID associated with the event (optional)
  *     CreateOrderRequest:
  *       type: object
  *       required:
@@ -85,6 +97,15 @@ const {
  *           type: string
  *           description: Customer address
  *           example: "123 Main St, City, State"
+ *         estimated_delivery_date:
+ *           type: string
+ *           format: date-time
+ *           description: Estimated delivery date (optional)
+ *           example: "2024-08-02T15:00:00.000Z"
+ *         user_id:
+ *           type: string
+ *           description: User ID associated with the order (optional)
+ *           example: "user-123"
  *     UpdateOrderStatusRequest:
  *       type: object
  *       required:
@@ -97,6 +118,9 @@ const {
  *         eventId:
  *           type: string
  *           description: Optional unique event ID for idempotency
+ *         user_id:
+ *           type: string
+ *           description: User ID associated with the status update (optional)
  *     OrderStatusHistory:
  *       type: object
  *       properties:
@@ -118,6 +142,9 @@ const {
  *                 format: date-time
  *               eventId:
  *                 type: string
+ *               user_id:
+ *                 type: string
+ *                 description: User ID associated with the status change
  *     StatusIntegrityValidation:
  *       type: object
  *       properties:
@@ -276,6 +303,8 @@ router.get("/:id", getOrderById);
  *           example:
  *             customer_name: "John Doe"
  *             address: "123 Main St, City, State"
+ *             estimated_delivery_date: "2024-08-02T15:00:00.000Z"
+ *             user_id: "user-123"
  *     responses:
  *       201:
  *         description: Order created successfully
@@ -322,6 +351,7 @@ router.post("/", createOrder);
  *           example:
  *             status: "PREPARING"
  *             eventId: "optional-unique-event-id"
+ *             user_id: "user-123"
  *     responses:
  *       200:
  *         description: Order status updated successfully

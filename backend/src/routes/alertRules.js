@@ -31,11 +31,15 @@ const {
  *         threshold:
  *           type: integer
  *           description: Threshold value in days or hours
- *           example: 2
+ *           example: 3
  *         active:
  *           type: boolean
  *           description: Whether rule is active
  *           example: true
+ *         user_id:
+ *           type: string
+ *           description: User ID associated with the rule (optional)
+ *           example: "user-123"
  *     CreateAlertRuleRequest:
  *       type: object
  *       required:
@@ -50,12 +54,16 @@ const {
  *         threshold:
  *           type: integer
  *           description: Threshold value in days or hours
- *           example: 2
+ *           example: 3
  *         active:
  *           type: boolean
  *           description: Whether rule is active
  *           default: true
  *           example: true
+ *         user_id:
+ *           type: string
+ *           description: User ID associated with the rule (optional)
+ *           example: "user-123"
  *     UpdateAlertRuleRequest:
  *       type: object
  *       properties:
@@ -69,6 +77,9 @@ const {
  *         active:
  *           type: boolean
  *           description: Whether rule is active
+ *         user_id:
+ *           type: string
+ *           description: User ID associated with the rule (optional)
  *     AlertRuleStats:
  *       type: object
  *       properties:
@@ -277,8 +288,9 @@ router.post("/execute", executeAlertRules);
  *             $ref: '#/components/schemas/CreateAlertRuleRequest'
  *           example:
  *             rule_type: "NOT_DISPATCHED_IN_X_DAYS"
- *             threshold: 2
+ *             threshold: 3
  *             active: true
+ *             user_id: "user-123"
  *     responses:
  *       201:
  *         description: Alert rule created successfully

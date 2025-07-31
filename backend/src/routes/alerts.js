@@ -29,11 +29,11 @@ const {
  *         alert_type:
  *           type: string
  *           description: Type of alert
- *           example: "DELAYED_PREPARATION"
+ *           example: "NOT_DISPATCHED_IN_X_DAYS"
  *         message:
  *           type: string
  *           description: Alert message
- *           example: "Order has been in CREATED status for more than 1 hour"
+ *           example: "Order has been in CREATED status for more than 3 days"
  *         triggered_at:
  *           type: string
  *           format: date-time
@@ -42,6 +42,10 @@ const {
  *           type: boolean
  *           description: Whether alert is resolved
  *           example: false
+ *         user_id:
+ *           type: string
+ *           description: User ID associated with the alert (optional)
+ *           example: "user-123"
  *         order:
  *           $ref: '#/components/schemas/OrderSummary'
  *     AlertRule:
@@ -91,11 +95,15 @@ const {
  *         alert_type:
  *           type: string
  *           description: Type of alert
- *           example: "DELAYED_PREPARATION"
+ *           example: "NOT_DISPATCHED_IN_X_DAYS"
  *         message:
  *           type: string
  *           description: Alert message
- *           example: "Order has been in CREATED status for more than 1 hour"
+ *           example: "Order has been in CREATED status for more than 3 days"
+ *         user_id:
+ *           type: string
+ *           description: User ID associated with the alert (optional)
+ *           example: "user-123"
  *     CreateAlertRuleRequest:
  *       type: object
  *       required:
@@ -294,8 +302,9 @@ router.get("/unresolved", getUnresolvedAlerts);
  *             $ref: '#/components/schemas/CreateAlertRequest'
  *           example:
  *             order_id: "cmdqjzodn0000y1i251v4cjj4"
- *             alert_type: "DELAYED_PREPARATION"
- *             message: "Order has been in CREATED status for more than 1 hour"
+ *             alert_type: "NOT_DISPATCHED_IN_X_DAYS"
+ *             message: "Order has been in CREATED status for more than 3 days"
+ *             user_id: "user-123"
  *     responses:
  *       201:
  *         description: Alert created successfully
