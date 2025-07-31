@@ -250,7 +250,7 @@ model Notification {
 
 ```bash
 # Clonar repositorio
-git clone <repository-url>
+git clone https://github.com/francomiret/orders-tracker-app.git
 cd orders-tracker-app/backend
 
 # Instalar dependencias
