@@ -14,7 +14,8 @@ async function main() {
         create: [
           {
             event_type: "CREATED",
-            timestamp: new Date(),
+            timestamp: new Date(Date.now() - 432000000),
+            user_id: "user-123",
           },
         ],
       },
@@ -29,11 +30,13 @@ async function main() {
         create: [
           {
             event_type: "CREATED",
-            timestamp: new Date(Date.now() - 3600000), // 1 hour ago
+            timestamp: new Date(Date.now() - 432000000),
+            user_id: "user-123",
           },
           {
             event_type: "PREPARING",
-            timestamp: new Date(),
+            timestamp: new Date(Date.now() - 432000000),
+            user_id: "user-123",
           },
         ],
       },
@@ -50,14 +53,17 @@ async function main() {
           {
             event_type: "CREATED",
             timestamp: new Date(Date.now() - 7200000),
+            user_id: "user-123",
           },
           {
             event_type: "PREPARING",
             timestamp: new Date(Date.now() - 3600000),
+            user_id: "user-123",
           },
           {
             event_type: "DISPATCHED",
             timestamp: new Date(),
+            user_id: "user-123",
           },
         ],
       },
@@ -70,6 +76,7 @@ async function main() {
       rule_type: "NOT_DISPATCHED_IN_X_DAYS",
       threshold: 2, // 2 days
       active: true,
+      user_id: "user-123",
     },
   });
 
@@ -78,6 +85,7 @@ async function main() {
       rule_type: "NOT_DELIVERED_SAME_DAY",
       threshold: 24, // 24 hours
       active: true,
+      user_id: "user-123",
     },
   });
 
@@ -89,6 +97,7 @@ async function main() {
       message: "Order has been in CREATED status for more than 1 hour",
       triggered_at: new Date(),
       resolved: false,
+      user_id: "user-123",
     },
   });
 

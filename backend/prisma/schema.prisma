@@ -15,6 +15,7 @@ model Order {
   estimated_delivery_date DateTime?
   created_at              DateTime    @default(now()) @map("created_at")
   updated_at              DateTime    @updatedAt @map("updated_at")
+  user_id                 String?
 
   events OrderEvent[]
   alerts Alert[]
@@ -27,6 +28,7 @@ model OrderEvent {
   order_id   String
   event_type OrderEventType
   timestamp  DateTime       @default(now())
+  user_id    String?
   event_id   String?        @unique
 
   order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
@@ -37,24 +39,42 @@ model OrderEvent {
 
 model AlertRule {
   id        Int           @id @default(autoincrement())
-  rule_type AlertRuleType @map("rule_type")
+  rule_type AlertRuleType
   threshold Int
   active    Boolean       @default(true)
+  user_id   String?
 
   @@map("alert_rules")
 }
 
 model Alert {
   id           Int      @id @default(autoincrement())
-  order_id     String   @map("order_id")
-  alert_type   String   @map("alert_type")
+  order_id     String
+  alert_type   String
   message      String
   triggered_at DateTime @default(now()) @map("triggered_at")
   resolved     Boolean  @default(false)
+  user_id      String?
 
   order Order @relation(fields: [order_id], references: [id], onDelete: Cascade)
 
   @@map("alerts")
+}
+
+model Notification {
+  id            Int              @id @default(autoincrement())
+  user_id       String?
+  type          NotificationType
+  title         String
+  message       String
+  data          Json?
+  read          Boolean          @default(false)
+  created_at    DateTime         @default(now()) @map("created_at")
+  read_at       DateTime?        @map("read_at")
+  sent_email    Boolean          @default(false) @map("sent_email")
+  email_sent_at DateTime?        @map("email_sent_at")
+
+  @@map("notifications")
 }
 
 enum OrderStatus {
@@ -74,4 +94,11 @@ enum OrderEventType {
 enum AlertRuleType {
   NOT_DISPATCHED_IN_X_DAYS
   NOT_DELIVERED_SAME_DAY
+}
+
+enum NotificationType {
+  ALERT_GENERATED
+  ORDER_STATUS_CHANGED
+  ADMIN_ALERT
+  SYSTEM_NOTIFICATION
 }
