@@ -8,8 +8,8 @@ const options = {
       version: "1.0.0",
       description: "A simple RESTful API for orders tracking",
       contact: {
-        name: "API Support",
-        email: "support@orderstracker.com",
+        name: "Franco Miret",
+        email: "francomiret11@gmail.com",
       },
     },
     servers: [
