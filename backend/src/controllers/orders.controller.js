@@ -1,30 +1,14 @@
-const prisma = require("../config/prisma");
+const ordersService = require("../services/orders.service");
 
 // Get all orders
 const getAllOrders = async (req, res) => {
   try {
-    const orders = await prisma.order.findMany({
-      include: {
-        events: {
-          orderBy: {
-            timestamp: "desc",
-          },
-        },
-        alerts: {
-          where: {
-            resolved: false,
-          },
-        },
-      },
-      orderBy: {
-        created_at: "desc",
-      },
-    });
+    const result = await ordersService.getAllOrders(req.query);
 
     res.json({
       success: true,
-      data: orders,
-      count: orders.length,
+      data: result.orders,
+      pagination: result.pagination,
     });
   } catch (error) {
     console.error("Error fetching orders:", error);
@@ -39,29 +23,7 @@ const getAllOrders = async (req, res) => {
 const getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        events: {
-          orderBy: {
-            timestamp: "desc",
-          },
-        },
-        alerts: {
-          orderBy: {
-            triggered_at: "desc",
-          },
-        },
-      },
-    });
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
-    }
+    const order = await ordersService.getOrderById(id);
 
     res.json({
       success: true,
@@ -69,6 +31,12 @@ const getOrderById = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching order:", error);
+    if (error.message === "Order not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Order not found",
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to fetch order",
@@ -80,24 +48,7 @@ const getOrderById = async (req, res) => {
 const createOrder = async (req, res) => {
   try {
     const { customer_name } = req.body;
-
-    const order = await prisma.order.create({
-      data: {
-        customer_name,
-        status: "CREATED",
-        events: {
-          create: [
-            {
-              event_type: "CREATED",
-              timestamp: new Date(),
-            },
-          ],
-        },
-      },
-      include: {
-        events: true,
-      },
-    });
+    const order = await ordersService.createOrder({ customer_name });
 
     res.status(201).json({
       success: true,
@@ -105,6 +56,12 @@ const createOrder = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating order:", error);
+    if (error.message === "Customer name is required") {
+      return res.status(400).json({
+        success: false,
+        error: "Customer name is required",
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to create order",
@@ -118,37 +75,7 @@ const updateOrderStatus = async (req, res) => {
     const { id } = req.params;
     const { status } = req.body;
 
-    // Validate status
-    const validStatuses = ["CREATED", "PREPARING", "DISPATCHED", "DELIVERED"];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        error:
-          "Invalid status. Must be one of: CREATED, PREPARING, DISPATCHED, DELIVERED",
-      });
-    }
-
-    const order = await prisma.order.update({
-      where: { id },
-      data: {
-        status,
-        events: {
-          create: [
-            {
-              event_type: status,
-              timestamp: new Date(),
-            },
-          ],
-        },
-      },
-      include: {
-        events: {
-          orderBy: {
-            timestamp: "desc",
-          },
-        },
-      },
-    });
+    const order = await ordersService.updateOrderStatus(id, status);
 
     res.json({
       success: true,
@@ -156,6 +83,18 @@ const updateOrderStatus = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating order:", error);
+    if (error.message === "Order not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Order not found",
+      });
+    }
+    if (error.message.includes("Invalid status")) {
+      return res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to update order",
@@ -167,17 +106,20 @@ const updateOrderStatus = async (req, res) => {
 const deleteOrder = async (req, res) => {
   try {
     const { id } = req.params;
-
-    await prisma.order.delete({
-      where: { id },
-    });
+    const result = await ordersService.deleteOrder(id);
 
     res.json({
       success: true,
-      message: "Order deleted successfully",
+      message: result.message,
     });
   } catch (error) {
     console.error("Error deleting order:", error);
+    if (error.message === "Order not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Order not found",
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to delete order",
@@ -189,13 +131,7 @@ const deleteOrder = async (req, res) => {
 const getOrderEvents = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const events = await prisma.orderEvent.findMany({
-      where: { order_id: id },
-      orderBy: {
-        timestamp: "desc",
-      },
-    });
+    const events = await ordersService.getOrderEvents(id);
 
     res.json({
       success: true,
@@ -203,6 +139,12 @@ const getOrderEvents = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching order events:", error);
+    if (error.message === "Order not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Order not found",
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to fetch order events",
@@ -214,13 +156,7 @@ const getOrderEvents = async (req, res) => {
 const getOrderAlerts = async (req, res) => {
   try {
     const { id } = req.params;
-
-    const alerts = await prisma.alert.findMany({
-      where: { order_id: id },
-      orderBy: {
-        triggered_at: "desc",
-      },
-    });
+    const alerts = await ordersService.getOrderAlerts(id);
 
     res.json({
       success: true,
@@ -228,6 +164,12 @@ const getOrderAlerts = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching order alerts:", error);
+    if (error.message === "Order not found") {
+      return res.status(404).json({
+        success: false,
+        error: "Order not found",
+      });
+    }
     res.status(500).json({
       success: false,
       error: "Failed to fetch order alerts",

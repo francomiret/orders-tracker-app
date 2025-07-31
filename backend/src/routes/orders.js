@@ -8,7 +8,7 @@ const {
   deleteOrder,
   getOrderEvents,
   getOrderAlerts,
-} = require("../controllers/ordersController");
+} = require("../controllers/orders.controller");
 
 /**
  * @swagger
